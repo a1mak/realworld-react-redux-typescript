@@ -1,5 +1,5 @@
 import { unwrapResult } from "@reduxjs/toolkit";
-import { isErrorBody } from "api/types";
+import { isValidationError } from "api/types";
 import { AppDispatch } from "app/store";
 import ErrorMessages from "components/ErrorMessages";
 import TextField from "components/TextField";
@@ -7,7 +7,8 @@ import { FC, FormEvent, useState } from "react";
 import { useDispatch } from "react-redux";
 import { NavLink } from "react-router-dom";
 import { withValue } from "utils/withValue";
-import { registerThunk } from "../authSlice";
+import { register } from "../authSlice";
+import { useHistory } from "react-router-dom";
 
 const SignUpForm: FC = () => {
   const [email, setEmail] = useState("");
@@ -15,13 +16,14 @@ const SignUpForm: FC = () => {
   const [password, setPassword] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string[]>>({});
   const dispatch = useDispatch<AppDispatch>();
+  const history = useHistory();
   const submit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
     try {
-      const res = await dispatch(registerThunk({ username, email, password }));
-      unwrapResult(res);
+      e.preventDefault();
+      unwrapResult(await dispatch(register({ username, email, password })));
+      history.push("/");
     } catch (err) {
-      if (isErrorBody(err)) {
+      if (isValidationError(err)) {
         setFieldErrors(err.errors);
       } else {
         console.error(err);

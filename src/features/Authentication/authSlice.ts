@@ -1,141 +1,161 @@
 import {
+  createAction,
   createAsyncThunk,
   createSlice,
+  isAnyOf,
   SerializedError,
 } from "@reduxjs/toolkit";
+// import api from "api";
 import { isValidationError, NetworkStatus } from "api/types";
 import { User } from "app/models/User";
-import { actionMatcher } from "../../utils/actionMatcher";
-import { ErrorBody } from "api/types";
-import { registerUser } from "api";
+import { AppAsyncThunk, AppThunk, RootState } from "app/store";
 
-interface AuthState {
+/**
+ * Authentication slice of Redux store
+ */
+type AuthState = {
   status: NetworkStatus;
-  currentUser: User | null;
-  error?: SerializedError | ErrorBody;
-}
+  currentUser: User | null; // Null if visitor is not authenticated
+  error?: SerializedError; // Any serializable error, basicaly a message
+};
 
+/**
+ * Initial state of authentication slice
+ */
 const initialState: AuthState = {
-  status: NetworkStatus.IDLE,
+  status: "idle",
   currentUser: null,
 };
 
-// Extracting type from thunk creator functions
-type LoginAsyncThunk = typeof login;
-type RegisterAsyncThunk = typeof registerThunk;
+/**
+ * Data for registration request
+ */
+type RegisterArgs = {
+  email: string;
+  username: string;
+  password: string;
+};
 
-// Extract type for "pending" actions of thunk creator
-type UserPendingAction = ReturnType<
-  RegisterAsyncThunk["pending"] | LoginAsyncThunk["pending"]
->;
-// Extract type for "fulfilled" actions of thunk creator
-type UserFulfilledAction = ReturnType<
-  RegisterAsyncThunk["fulfilled"] | LoginAsyncThunk["fulfilled"]
->;
-// Extract type for "rejected" actions of thunk creator
-type UserRejectedAction = ReturnType<
-  RegisterAsyncThunk["rejected"] | LoginAsyncThunk["rejected"]
->;
+/**
+ * Data for login request
+ */
+type LoginArgs = {
+  email: string;
+  password: string;
+};
 
-export const login = createAsyncThunk<
-  User,
-  { email: string; password: string },
-  { rejectValue: ErrorBody }
->("authentication/login", async (user, { rejectWithValue }) => {
-  const response = await fetch(
-    "https://conduit.productionready.io/api/users/login",
-    {
-      body: JSON.stringify({ user }),
-      method: "post",
-      headers: { "Content-Type": "application/json" },
+/**
+ * Generic AsyncThunk for user response
+ */
+type UserAsyncThunk<Args = void> = AppAsyncThunk<User, Args>;
+
+/**
+ * User registration thunk
+ * @returns {User | ValidationError}
+ */
+export const register: UserAsyncThunk<RegisterArgs> = createAsyncThunk(
+  "authentication/register",
+  async (data, { rejectWithValue, extra: { register } }) => {
+    const result = await register(data);
+
+    // If result is validation error then produce reject action with error body
+    if (isValidationError(result)) {
+      return rejectWithValue(result);
     }
-  );
 
-  if (response.status === 422) {
-    return rejectWithValue((await response.json()) as ErrorBody);
+    return result;
   }
+);
 
-  return (await response.json()) as User;
-});
+/**
+ * User login thunk
+ * @returns {User | ValidationError}
+ */
+export const login: UserAsyncThunk<LoginArgs> = createAsyncThunk(
+  "authentication/login",
+  async (data, { rejectWithValue, extra: { login } }) => {
+    const result = await login(data);
 
-export const registerThunk = createAsyncThunk<
-  User,
-  { email: string; username: string; password: string },
-  { rejectValue: ErrorBody }
->("authentication/register", async (user, { rejectWithValue }) => {
-  try {
-  const response = await registerUser(user);
+    // If api returns a validation error then reject action with error body
+    if (isValidationError(result)) {
+      return rejectWithValue(result);
+    }
 
-  if (typeof response === "undefined")
-    return rejectWithValue({ errors: { body: ["Error"] } });
-
-  const data = response.data;
-
-  if (isValidationError(data)) {
-    return rejectWithValue(data.data);
+    return result;
   }
-  
-  return data;
+);
 
-  // } catch (error) {
-  //   if (error.response?.status === 422) {
-  //     return rejectWithValue(error.response.data as FormFieldError);
-  //   }
+/**
+ * Get current user thunk
+ * @returns {User | ValidationError}
+ */
+export const current: UserAsyncThunk = createAsyncThunk(
+  "authentication/getUser",
+  async (_, { rejectWithValue, extra: { getCurrent } }) => {
+    const result = await getCurrent();
 
-  //   return rejectWithValue(error);
-  // }
-});
+    // If api returns a validation error then reject action with error body
+    if (isValidationError(result)) {
+      return rejectWithValue(result);
+    }
 
-export const registerUserBase = createAsyncThunk<
-  User,
-  { email: string; username: string; password: string },
-  { rejectValue: ErrorBody }
->("authentication/register", async (user, { rejectWithValue }) => {
-  const response = await registerUser(user);
-
-  if (typeof response === "undefined")
-    return rejectWithValue({ errors: { body: ["Error"] } });
-
-  const data = response.data;
-
-  if (isValidationError(data)) {
-    return rejectWithValue(data.data);
+    return result;
   }
-  
-  return data;
-});
+);
 
+/**
+ * User logout thunk
+ */
+export const logout: AppThunk<void, ReturnType<typeof reset>> = () => (
+  dispatch,
+  _,
+  { logout }
+) => {
+  logout();
+
+  dispatch(reset());
+};
+
+/**
+ * Reset slice state action
+ */
+const reset = createAction("authentication/logout");
+
+/**
+ * Configure Authentication slice
+ */
 const authSlice = createSlice({
   name: "authentication",
   initialState,
   reducers: {},
   extraReducers: (builder) => {
     builder
-      .addMatcher<UserPendingAction>(
-        actionMatcher(login.pending, registerThunk.pending),
+      .addCase(reset, () => initialState)
+      .addMatcher(
+        isAnyOf(current.pending, register.pending, login.pending),
         (state) => {
-          state.status = NetworkStatus.LOADING;
+          state.status = "loading";
         }
       )
-      .addMatcher<UserFulfilledAction>(
-        actionMatcher(login.fulfilled, registerThunk.fulfilled),
+      .addMatcher(
+        isAnyOf(current.fulfilled, register.fulfilled, login.fulfilled),
         (state, action) => {
-          state.status = NetworkStatus.SUCCESS;
+          state.status = "success";
           state.currentUser = action.payload;
         }
       )
-      .addMatcher<UserRejectedAction>(
-        actionMatcher(login.rejected, registerThunk.rejected),
+      .addMatcher(
+        isAnyOf(current.rejected, register.rejected, login.rejected),
         (state, action) => {
-          state.status = NetworkStatus.FAIL;
-          // if (action.payload) {
-          //   state.error = action.payload.errors;
-          // } else {
+          state.status = "fail";
           state.error = action.error;
-          // }
         }
       );
   },
 });
+
+/** Authentication selectors */
+export const selectCurrentUser = (state: RootState) => state.auth.currentUser;
+export const selectUserRequestStatus = (state: RootState) => state.auth.status;
 
 export default authSlice.reducer;

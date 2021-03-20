@@ -1,5 +1,3 @@
-import * as React from "react";
-
 const Article: React.FC = () => {
   return <div>Article</div>;
 };

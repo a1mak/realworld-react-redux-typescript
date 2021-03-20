@@ -1,9 +1,19 @@
-import { ErrorBody } from "api/types";
-import { FC } from "react";
+type ErrorMessagesProps = {
+  /**
+   * Accepts object with errors grouped by field,
+   * eg. `firstName: ["Invalid characters", "Too short"]`
+   * @type {Record<string, string[]>}
+   */
+  errors: Record<string, string[]>;
+};
 
-interface IErrorMessagesProps extends ErrorBody {}
-
-const ErrorMessages: FC<IErrorMessagesProps> = ({ errors }) => {
+/**
+ * Displays request errors grouped by type
+ *
+ * @param {*} { errors }
+ * @return {*}
+ */
+const ErrorMessages: React.FC<ErrorMessagesProps> = ({ errors }) => {
   const errorEntries = Object.entries(errors);
 
   return errorEntries.length ? (

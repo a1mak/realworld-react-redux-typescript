@@ -1,5 +1,4 @@
-import * as React from "react";
-import SignUpForm from "features/Authentication/views/SignUpForm";
+import SignUpForm from "features/Authentication/components/SignUpForm";
 
 const Register: React.FC = () => {
   return (

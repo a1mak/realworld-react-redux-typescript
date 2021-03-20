@@ -1,6 +1,11 @@
+import { setToken } from "api";
+import { AppDispatch } from "app/store";
+import { current } from "features/Authentication/authSlice";
+import Footer from "features/Footer/views/Footer";
+import { useEffect } from "react";
+import { useDispatch } from "react-redux";
 import { BrowserRouter as Router, Route, Switch } from "react-router-dom";
-import "./App.css";
-import NavBar from "./features/NavBar/NavBar";
+import NavBar from "./features/NavBar/views/NavBar";
 import Article from "./pages/Article";
 import Home from "./pages/Home";
 import Login from "./pages/Login";
@@ -9,6 +14,15 @@ import Register from "./pages/Register";
 import Settings from "./pages/Settings";
 
 function App() {
+  const dispatch = useDispatch<AppDispatch>();
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+
+    if (token) {
+      setToken(token);
+      dispatch(current());
+    }
+  }, []);
   return (
     <Router>
       <NavBar></NavBar>
@@ -25,6 +39,7 @@ function App() {
         <Route exact path="/article/:articleSlug" component={Article} />
         <Route exact path="/profile/:username" component={Profile} />
       </Switch>
+      <Footer />
     </Router>
   );
 }
